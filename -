@@ -1,0 +1,179 @@
+IF EXISTS(SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='Store_Source')
+    DROP TABLE Store_Source
+go
+
+CREATE TABLE Store_Source (
+	src_id            int    not null,
+	src_store_name    varchar(20) not null,
+	src_department_1  varchar (30),
+	src_department_2  varchar (30), 
+	src_hq_location   varchar(40) not null,
+	src_loc_code      char(02) not null,
+	src_loc_name      varchar (20) not null
+)
+
+INSERT INTO Store_Source      
+     VALUES
+           (1,'Barneys','Mens Clothing', 'Footwear', 'Manhattan, NY', 'EM', 'Enclosed Mall'),
+		   (2,'Macys','Housewares', 'Clothing', 'Philadelphia, PA', 'SM', 'Strip Mall'),
+		   (3,'KitchenAide','Pots and Pans', 'Housewares', 'BentonHarbor, MI', 'P', 'Plaza'),
+		   (4,'Apple','Computers', 'Phones', 'Cupertino, CA', 'SF', 'Store Front'),
+		   (5,'Pottery Barn','Furniture', 'Lighting', 'SanFrancisco, CA', 'SF', 'Store Front'),
+		   (6,'Clarke Shoes',null, 'Footwear', 'Waltham, MA', 'P', 'Plaza'),
+		   (7,'Chicos','Womens Clothing', 'Footwear', 'FortMeyers, FL', 'EM', 'Enclosed Mall')
+            
+GO
+
+
+
+-- Step 2: Creating the Entire Internal Model
+   
+IF EXISTS(SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='store_departments')
+DROP TABLE store_departments
+go
+
+IF EXISTS(SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='stores')
+DROP TABLE stores
+go 
+
+IF EXISTS(SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='location_codes')
+DROP TABLE location_codes
+go
+
+ 
+CREATE TABLE location_codes (
+	loc_code char(02) not null,
+	loc_code_name varchar(20) not null
+)
+
+CREATE TABLE stores (
+	store_id int not null,
+	store_name varchar(20) not null,
+	store_hq_city varchar(30) not null,
+	store_hq_st_abbr char(02) not null,
+	store_loc_code char(02) not null
+)
+
+CREATE TABLE store_departments (
+	sd_store_id int not null,
+	sd_dept_name varchar (30) not null
+)
+
+ALTER TABLE location_codes
+	ADD
+		CONSTRAINT pk_loc_code PRIMARY KEY (loc_code)
+		
+ALTER TABLE stores
+	ADD
+		CONSTRAINT pk_store_id PRIMARY KEY (store_id),
+		CONSTRAINT fk_store_loc_code
+			FOREIGN KEY (store_loc_code)
+			REFERENCES location_codes(loc_code)
+					
+ALTER TABLE store_departments
+	ADD
+		CONSTRAINT pk_sd_store_id PRIMARY KEY (sd_store_id,sd_dept_name),
+		CONSTRAINT fk_sd_store_id
+			FOREIGN KEY (sd_store_id)
+			REFERENCES stores(store_id)
+
+
+GO
+
+--Step 3: Your Data Cleansing SQL Goes Here 
+
+UPDATE Store_Source
+	SET src_department_2 = 'Clothing'
+	WHERE src_department_2 = 'Mens Clothing' Or src_department_2='Womens Clothing'
+UPDATE Store_Source
+	SET src_department_1 = 'Clothing'
+	WHERE src_department_1 = 'Womens Clothing' Or src_department_1='Mens Clothing'
+
+	-- or in targeted format ... 
+	Update Store_Source
+	set src_department_1='Clothing'
+	where src_id =1 Or src_id=7
+
+-- POTS AND PANS TO HOUSEWARES
+update Store_Source
+set src_department_1='Housewares'
+where src_department_1='Pots and Pans'
+
+update Store_source
+set src_department_2='Housewares'
+where src_department_2='Pots and Pans'
+
+-- Or Targeted format --
+update store_source
+set src_department_1='Housewares'
+where src_id=3
+
+update store_source
+set src_department_2='Housewares'
+where src_id=3 
+
+
+-- DEVICES UPDATE --
+-- devices department update
+UPDATE Store_Source
+	SET src_department_2 = 'Devices'
+	WHERE src_department_2 = 'Computers' Or src_department_2 = 'Phones'
+UPDATE Store_Source
+	SET src_department_1 = 'Devices'
+	WHERE src_department_1 = 'Phones' Or src_department_1 = 'Computers'
+
+	-- or in targeted format
+		Update Store_Source
+	set src_department_1='Devices'
+	where src_id =4
+			Update Store_Source
+	set src_department_2='Devices'
+	where src_id =4
+GO
+ 
+
+--Question 1.4: Code Your Migration SQL Here. This will insert the data into the 3 new tables.  
+
+-- insert location codes
+INSERT INTO location_codes
+SELECT DISTINCT src_loc_code, src_loc_name 
+	FROM Store_Source
+
+-- insert stores
+INSERT INTO stores
+SELECT DISTINCT src_id, src_store_name, 
+SUBSTRING(src_hq_location,1,CHARINDEX(',',src_hq_location)-1),
+SUBSTRING(src_hq_location,CHARINDEX(',',src_hq_location)+2,2),
+src_loc_code
+	FROM Store_Source
+
+
+	
+--insert departments union 
+INSERT INTO store_departments
+SELECT DISTINCT src_id, src_department_1
+	FROM Store_Source
+	WHERE src_department_1 is not null
+	UNION
+SELECT DISTINCT src_id, src_department_2
+	FROM Store_Source
+	WHERE src_department_2 is not null
+
+  GO
+--Step 5:Migration Verification - Code your Queries Here
+/*
+ SELECT store_id, store_name, store_hq_city + ', ' + store_hq_st_abbr as 'HQ Location', sd_dept_name, loc_code_name
+	FROM stores
+	JOIN store_departments on (store_id = sd_store_id)
+	JOIN location_codes on (store_loc_code = loc_code)
+
+SELECT sd_dept_name, COUNT(sd_store_id) as 'Number of Departments of this Type'
+	FROM store_departments
+	GROUP BY sd_dept_name
+	order by COUNT(sd_store_id) desc
+ GO
+ */
+
+select * from stores
+select * from store_departments
+select * from location_codes
